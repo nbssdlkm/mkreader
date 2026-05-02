@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MkReader</string>
+    <string name="title_activity_main">MkReader</string>
+    <string name="package_name">com.mkreader.app</string>
+    <string name="custom_url_scheme">com.mkreader.app</string>
+</resources>
