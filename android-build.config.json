@@ -1,0 +1,9 @@
+{
+  "appId": "com.mkreader.app",
+  "projectSlug": "mkreader",
+  "repoUrl": "https://github.com/nbssdlkm/mkreader.git",
+  "branch": "master",
+  "uiSubdir": "",
+  "keystoreAlias": "mkreader",
+  "keystorePassword": "mkreader"
+}
