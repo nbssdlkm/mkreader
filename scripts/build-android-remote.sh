@@ -72,6 +72,8 @@ npx cap sync android 2>&1 | tail -2
 
 step "[5/6] gradle assembleDebug"
 cd android
+# Defensive: Windows-side commits drop +x on gradlew. Re-enable per build.
+chmod +x ./gradlew
 ./gradlew assembleDebug 2>&1 | tail -5
 
 step "[6/6] verify signature + deliver"
