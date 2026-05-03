@@ -3,6 +3,7 @@ package com.mkreader.app;
 import android.content.Intent;
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.PluginHandle;
 
 public class MainActivity extends BridgeActivity {
 
@@ -26,9 +27,14 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void handleFileIntent(Intent intent) {
-        FileReceiverPlugin plugin = getBridge().getPlugin(FileReceiverPlugin.class);
-        if (plugin != null) {
-            plugin.handleIntent(intent);
+        // Bridge.getPlugin takes the plugin id (matches @CapacitorPlugin name)
+        // and returns a PluginHandle wrapper; .getInstance() yields the Plugin
+        // instance which we cast to our concrete type.
+        PluginHandle handle = getBridge().getPlugin("FileReceiver");
+        if (handle == null) return;
+        Object instance = handle.getInstance();
+        if (instance instanceof FileReceiverPlugin) {
+            ((FileReceiverPlugin) instance).handleIntent(intent);
         }
     }
 }
