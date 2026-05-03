@@ -49,6 +49,17 @@ git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 git log --oneline -1
 
+# After git reset, THIS script file on disk may have been replaced. Re-exec
+# self so the new bash process reads the new content. Without this, POSIX
+# file-handle semantics keep the OLD script content readable through bash's
+# open fd, causing confusing errors where line numbers reference the pre-reset
+# version (e.g., "line 75: ./gradlew: 权限不够" when current file has chmod
+# +x ./gradlew at line 76 and ./gradlew at line 77).
+if [ -z "${_BUILD_RELOADED:-}" ]; then
+    export _BUILD_RELOADED=1
+    exec bash "$0" "$@"
+fi
+
 step "[2/6] keystore precondition"
 if [ ! -f "$KEYSTORE" ]; then
     echo "ERROR: keystore missing at $KEYSTORE" >&2
