@@ -45,7 +45,13 @@ fi
 cd "$REPO_DIR"
 
 step "[1/6] git fetch + reset to origin/$BRANCH"
-git fetch origin "$BRANCH"
+# git fetch is best-effort: GitHub access from this network can flake (TLS
+# resets, timeouts). If fetch fails, fall back to whatever origin/$BRANCH
+# ref we already have cached. Reset --hard below will fail loudly if no
+# cached ref exists at all.
+if ! git fetch origin "$BRANCH"; then
+    echo "[warn] git fetch failed; falling back to cached origin/$BRANCH"
+fi
 git reset --hard "origin/$BRANCH"
 git log --oneline -1
 
