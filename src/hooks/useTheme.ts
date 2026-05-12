@@ -1,21 +1,32 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { Preferences } from '@capacitor/preferences';
+
+const THEME_KEY = 'theme';
 
 export function useTheme() {
-  const [isDark, setIsDark] = useState(() => {
-    try {
-      return localStorage.getItem('mkreader-theme') === 'dark';
-    } catch {
-      return false;
-    }
-  });
+  const [isDark, setIsDark] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    Preferences.get({ key: THEME_KEY })
+      .then(({ value }) => {
+        if (value === 'dark' || value === 'light') {
+          setIsDark(value === 'dark');
+        }
+        setLoaded(true);
+      })
+      .catch(() => {
+        setLoaded(true);
+      });
+  }, []);
 
   const toggle = useCallback(() => {
     setIsDark(prev => {
       const next = !prev;
-      try { localStorage.setItem('mkreader-theme', next ? 'dark' : 'light'); } catch {}
+      Preferences.set({ key: THEME_KEY, value: next ? 'dark' : 'light' }).catch(() => {});
       return next;
     });
   }, []);
 
-  return { isDark, toggle };
+  return { isDark, loaded, toggle };
 }

@@ -2,17 +2,29 @@ package com.mkreader.app;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.PluginHandle;
 
 public class MainActivity extends BridgeActivity {
 
+    private static final String TAG = "MainActivity";
+
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
+        // Register custom plugin BEFORE super.onCreate() so it's included
+        // in the Bridge builder. Capacitor's PluginManager only loads plugins
+        // from capacitor.plugins.json (npm packages), not custom app plugins.
+        registerPlugin(FileReceiverPlugin.class);
+
         super.onCreate(savedInstanceState);
-        // Handle intent from app launch
+
+        // After the Bridge is created, process any launch intent.
+        // (onNewIntent already fires during BridgeActivity.load() for cold start,
+        //  but we call it here too as a safety net for edge cases.)
         Intent intent = getIntent();
         if (intent != null) {
+            Log.d(TAG, "onCreate intent action=" + intent.getAction() + " type=" + intent.getType());
             handleFileIntent(intent);
         }
     }
@@ -20,21 +32,24 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        // Handle intent when app is already running
+        Log.d(TAG, "onNewIntent action=" + (intent != null ? intent.getAction() : "null")
+            + " type=" + (intent != null ? intent.getType() : "null"));
         if (intent != null) {
             handleFileIntent(intent);
         }
     }
 
     private void handleFileIntent(Intent intent) {
-        // Bridge.getPlugin takes the plugin id (matches @CapacitorPlugin name)
-        // and returns a PluginHandle wrapper; .getInstance() yields the Plugin
-        // instance which we cast to our concrete type.
         PluginHandle handle = getBridge().getPlugin("FileReceiver");
-        if (handle == null) return;
+        if (handle == null) {
+            Log.w(TAG, "FileReceiver plugin not found in bridge");
+            return;
+        }
         Object instance = handle.getInstance();
         if (instance instanceof FileReceiverPlugin) {
             ((FileReceiverPlugin) instance).handleIntent(intent);
+        } else {
+            Log.w(TAG, "FileReceiver plugin instance is not FileReceiverPlugin");
         }
     }
 }

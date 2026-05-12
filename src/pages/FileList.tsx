@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { FolderOpen, Clock, Settings, FileText, Search, Trash2, Share2 } from 'lucide-react';
+import { FolderOpen, Clock, Settings, FileText, Search, Trash2, Share2, Plus, X } from 'lucide-react';
 import { useFileSystem } from '../hooks/useFileSystem';
 import { useRecentFiles } from '../hooks/useRecentFiles';
 import { Button } from '../components/ui/Button';
@@ -7,7 +7,7 @@ import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Spinner } from '../components/ui/Spinner';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
-import { Share } from '@capacitor/share';
+import { shareMarkdownFile } from '../utils/fileReceiver';
 
 interface FileListProps {
   isDark: boolean;
@@ -19,18 +19,30 @@ type TabId = 'files' | 'recent' | 'settings';
 
 export function FileList({ isDark, onToggleTheme, onFileSelect }: FileListProps) {
   const [activeTab, setActiveTab] = useState<TabId>('files');
-  const { files: recentFiles, loaded: recentLoaded, clearRecent } = useRecentFiles();
-  const { listDirectory, loading: dirLoading, readFile } = useFileSystem();
+  const { files: recentFiles, loaded: recentLoaded, clearRecent, removeRecent } = useRecentFiles();
+  const { listDirectory, createFile, deleteFile, loading: dirLoading } = useFileSystem();
   const [dirFiles, setDirFiles] = useState<{ name: string; uri: string }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [newFileName, setNewFileName] = useState('');
+  const [showNewFileInput, setShowNewFileInput] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const loadFiles = useCallback(() => {
+    listDirectory()
+      .then(files => {
+        setDirFiles(files.filter(f => !f.isDirectory).map(f => ({ name: f.name, uri: f.uri })));
+      })
+      .catch(() => {});
+  }, [listDirectory]);
 
   useEffect(() => {
     if (activeTab === 'files') {
-      listDirectory('').then(files => {
-        setDirFiles(files.filter(f => !f.isDirectory).map(f => ({ name: f.name, uri: f.uri })));
-      }).catch(() => {});
+      loadFiles();
     }
-  }, [activeTab, listDirectory]);
+  }, [activeTab, loadFiles]);
 
   const handleOpenFile = useCallback((uri: string, name: string) => {
     onFileSelect(uri, name);
@@ -38,12 +50,44 @@ export function FileList({ isDark, onToggleTheme, onFileSelect }: FileListProps)
 
   const handleShareFile = useCallback(async (uri: string, name: string) => {
     try {
-      const text = await readFile(uri);
-      await Share.share({ title: name, text, dialogTitle: '分享文件' });
+      await shareMarkdownFile(uri, name);
     } catch {
       // user cancelled or unavailable
     }
-  }, [readFile]);
+  }, []);
+
+  const handleCreateFile = useCallback(async () => {
+    const name = newFileName.trim();
+    if (!name) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const uri = await createFile(name);
+      setNewFileName('');
+      setShowNewFileInput(false);
+      loadFiles(); // Refresh directory listing
+      onFileSelect(uri, name.endsWith('.md') ? name : `${name}.md`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '创建失败';
+      setCreateError(msg);
+    } finally {
+      setCreating(false);
+    }
+  }, [newFileName, createFile, onFileSelect, loadFiles]);
+
+  const handleDeleteFile = useCallback(async (uri: string) => {
+    setDeleting(true);
+    try {
+      await deleteFile(uri);
+      setDirFiles(prev => prev.filter(f => f.uri !== uri));
+      removeRecent(uri);
+      setDeleteConfirm(null);
+    } catch {
+      // deletion failed
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteFile, removeRecent]);
 
   const filteredDir = dirFiles.filter(f =>
     !searchTerm || f.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -76,16 +120,55 @@ export function FileList({ isDark, onToggleTheme, onFileSelect }: FileListProps)
           <ThemeToggle isDark={isDark} onToggle={onToggleTheme} />
         </div>
 
-        {/* Search */}
-        <div className="relative mt-3">
-          <Search className="absolute left-3 top-2.5 text-text/40" size={16} />
-          <Input
-            className="pl-10"
-            placeholder="搜索文件..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-          />
+        {/* Search + New file */}
+        <div className="flex items-center gap-2 mt-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 text-text/40" size={16} />
+            <Input
+              className="pl-10"
+              placeholder="搜索文件..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <Button
+            tone="accent"
+            fill="solid"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setShowNewFileInput(true)}
+            title="新建文件"
+          >
+            <Plus size={16} />
+          </Button>
         </div>
+
+        {/* New file name input */}
+        {showNewFileInput && (
+          <div className="flex items-center gap-2 mt-2">
+            <Input
+              className="flex-1"
+              placeholder="文件名，如 notes.md"
+              value={newFileName}
+              onChange={e => { setNewFileName(e.target.value); setCreateError(null); }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleCreateFile();
+                if (e.key === 'Escape') { setShowNewFileInput(false); setNewFileName(''); setCreateError(null); }
+              }}
+              autoFocus
+              tone={createError ? 'error' : undefined}
+            />
+            <Button tone="accent" fill="solid" size="sm" onClick={handleCreateFile} disabled={!newFileName.trim() || creating}>
+              {creating ? <Spinner size="sm" /> : '创建'}
+            </Button>
+            <Button tone="neutral" fill="plain" size="sm" className="px-2" onClick={() => { setShowNewFileInput(false); setNewFileName(''); setCreateError(null); }}>
+              <X size={16} />
+            </Button>
+          </div>
+        )}
+        {createError && (
+          <p className="mt-1.5 text-xs text-error">{createError}</p>
+        )}
       </header>
 
       {/* Content */}
@@ -98,7 +181,7 @@ export function FileList({ isDark, onToggleTheme, onFileSelect }: FileListProps)
               <EmptyState
                 icon={<FileText size={40} />}
                 title="暂无 Markdown 文件"
-                description="将 .md 文件放入应用目录即可在此查看"
+                description="点击右上角 + 新建 Markdown 文件，或从微信等应用分享 .md 文件到此打开"
               />
             ) : (
               <div className="space-y-2">
@@ -114,8 +197,16 @@ export function FileList({ isDark, onToggleTheme, onFileSelect }: FileListProps)
                     <button
                       onClick={(e) => { e.stopPropagation(); handleShareFile(f.uri, f.name); }}
                       className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-text/30 hover:text-accent transition-colors"
+                      title="分享"
                     >
                       <Share2 size={16} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteConfirm(f.uri); }}
+                      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-text/30 hover:text-error transition-colors"
+                      title="删除"
+                    >
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
@@ -217,6 +308,30 @@ export function FileList({ isDark, onToggleTheme, onFileSelect }: FileListProps)
           })}
         </div>
       </nav>
+
+      {/* Delete confirmation dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 safe-area-bottom">
+          <div className="w-full max-w-sm rounded-2xl bg-surface p-6 shadow-xl border border-black/10 dark:border-white/10">
+            <p className="text-base font-medium text-text mb-1">确认删除</p>
+            <p className="text-sm text-text/50 mb-5">此操作不可撤销，确定要删除该文件吗？</p>
+            <div className="flex flex-col gap-2">
+              <Button
+                tone="destructive"
+                fill="solid"
+                className="w-full"
+                onClick={() => handleDeleteFile(deleteConfirm)}
+                disabled={deleting}
+              >
+                {deleting ? <Spinner size="sm" /> : '删除'}
+              </Button>
+              <Button tone="neutral" fill="plain" className="w-full" onClick={() => setDeleteConfirm(null)}>
+                取消
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

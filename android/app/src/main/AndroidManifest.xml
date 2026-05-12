@@ -22,24 +22,53 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Open .md / .markdown / .txt files -->
+            <!-- Open .md / .markdown / .txt from file:// URIs (file managers on older Android) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="file" />
-                <data android:scheme="content" />
                 <data android:mimeType="text/*" />
                 <data android:pathPattern=".*\\.md" />
                 <data android:pathPattern=".*\\.markdown" />
                 <data android:pathPattern=".*\\.txt" />
             </intent-filter>
 
-            <!-- Receive shared text/files -->
+            <!-- Open text/* from content:// URIs (WeChat, file managers on Android 10+, browsers) -->
+            <!-- No pathPattern because content:// URIs are often opaque -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:mimeType="text/*" />
+            </intent-filter>
+
+            <!-- Receive shared text/markdown files (WeChat share, other apps) -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/*" />
+            </intent-filter>
+
+            <!-- Receive shared files with unknown MIME (some apps send .md as application/octet-stream) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+
+            <!-- Receive multiple shared files (ACTION_SEND_MULTIPLE) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/*" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
 
         </activity>

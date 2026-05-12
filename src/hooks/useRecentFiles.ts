@@ -37,16 +37,21 @@ export function useRecentFiles() {
   }, []);
 
   const addRecent = useCallback(async (file: RecentFile) => {
-    // Update state first (optimistic UI)
-    setFiles(prev => {
-      const filtered = prev.filter(f => f.uri !== file.uri);
-      return [{ ...file, lastOpened: Date.now() }, ...filtered].slice(0, MAX_RECENT);
-    });
+    // Read the current persisted value FIRST to avoid race conditions
+    // where loadRecent hasn't completed yet (e.g. cold start via Intent).
+    let persisted: RecentFile[] = [];
+    try {
+      const { value } = await Preferences.get({ key: RECENT_KEY });
+      if (value) persisted = JSON.parse(value);
+    } catch {}
 
-    // Persist from ref to avoid race conditions between rapid calls
-    const current = filesRef.current;
-    const filtered = current.filter(f => f.uri !== file.uri);
+    const filtered = persisted.filter(f => f.uri !== file.uri);
     const updated = [{ ...file, lastOpened: Date.now() }, ...filtered].slice(0, MAX_RECENT);
+
+    // Update state (may be redundant with loadRecent that follows, but ensures UI freshness)
+    setFiles(updated);
+    filesRef.current = updated;
+
     try {
       await Preferences.set({ key: RECENT_KEY, value: JSON.stringify(updated) });
     } catch {}
@@ -58,5 +63,20 @@ export function useRecentFiles() {
     filesRef.current = [];
   }, []);
 
-  return { files, loaded, addRecent, clearRecent };
+  const removeRecent = useCallback(async (uri: string) => {
+    // Read persisted state to avoid race conditions
+    let persisted: RecentFile[] = [];
+    try {
+      const { value } = await Preferences.get({ key: RECENT_KEY });
+      if (value) persisted = JSON.parse(value);
+    } catch {}
+    const updated = persisted.filter(f => f.uri !== uri);
+    setFiles(updated);
+    filesRef.current = updated;
+    try {
+      await Preferences.set({ key: RECENT_KEY, value: JSON.stringify(updated) });
+    } catch {}
+  }, []);
+
+  return { files, loaded, addRecent, removeRecent, clearRecent };
 }

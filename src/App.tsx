@@ -11,7 +11,7 @@ type Page = 'home' | 'editor';
 function App() {
   const [page, setPage] = useState<Page>('home');
   const [currentFile, setCurrentFile] = useState<{ uri: string; name: string } | null>(null);
-  const { isDark, toggle: toggleTheme } = useTheme();
+  const { isDark, loaded: themeLoaded, toggle: toggleTheme } = useTheme();
   const { addRecent } = useRecentFiles();
 
   const handleFileSelect = useCallback((uri: string, name: string) => {
@@ -49,20 +49,23 @@ function App() {
   }, [handleFileSelect]);
 
   return (
-    <div className={isDark ? 'theme-night' : ''}>
-      {page === 'home' && (
+    <div className={themeLoaded && isDark ? 'theme-night' : ''}>
+      {!themeLoaded ? (
+        <div className="app-height bg-background" />
+      ) : page === 'home' ? (
         <FileList
           isDark={isDark}
           onToggleTheme={toggleTheme}
           onFileSelect={handleFileSelect}
         />
-      )}
-      {page === 'editor' && currentFile && (
+      ) : page === 'editor' && currentFile ? (
         <Editor
           fileUri={currentFile.uri}
           fileName={currentFile.name}
           onBack={handleBack}
         />
+      ) : (
+        <div className="app-height bg-background" />
       )}
     </div>
   );

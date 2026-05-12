@@ -12,3 +12,4 @@ Thumbs.db
 # === Secrets ===
 *.keystore
 keystores/
+android-build.config.json
